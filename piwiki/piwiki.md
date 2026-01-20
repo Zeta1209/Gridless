@@ -9,7 +9,8 @@ Create an autonomous Wi-Fi access point serving offline Wikipedia via Kiwix:
 - **Kiwix** → HTTP server for offline Wikipedia
 
 ---
-
+### I added 3D files of a case for the Raspberry pi Zero W with Pi Sugar and a heatsink. Also uploaded it to Thingiverse: https://www.thingiverse.com/thing:7275604
+---
 ## Required Hardware
 
 | Component | Notes |
