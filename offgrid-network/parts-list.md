@@ -14,7 +14,7 @@ A rugged, waterproof case containing an off-grid mesh network system with:
 
 | Item | Description | Source | Est. Price (CAD) |
 |------|-------------|--------|------------------|
-| **MEIJIA Portable Waterproof Hard Camera Case With Foam** | Outside: 15.98" x 12.99" x 6.85", watertight, IP67, Pick N' Pluck foam | [Amazon.ca](https://www.amazon.ca/dp/B07RYHL69R) | ~$100 |
+| **MEIJIA Portable Waterproof Hard Camera Case With Foam** | Outside: 15.98" x 12.99" x 6.85", watertight, IP67, Pick N' Pluck foam | [Amazon.ca](https://www.amazon.ca/dp/B07RYHL69R) | ~$115 |
 
 **Note:** In this project we will use 3D printed internal mounts, so get the case **without foam** or with Pick N' Pluck foam you can remove.
 
@@ -26,7 +26,7 @@ A rugged, waterproof case containing an off-grid mesh network system with:
 
 | Item | Description | Source | Est. Price (CAD) |
 |------|-------------|--------|------------------|
-| **Raspberry Pi 5 4GB Starter Kit** | 2.4GHz quad-core, with active cooler and storage, runs MeshMonitor for offline map with GPS | [CanaKit](https://www.canakit.com/canakit-raspberry-pi-5-starter-kit-turbine-black.html) | ~$195.95 |
+| **Raspberry Pi 5 4GB Starter Kit** | 2.4GHz quad-core, with active cooler and storage, runs MeshMonitor for offline map with GPS | [CanaKit](https://www.canakit.com/canakit-raspberry-pi-5-starter-kit-turbine-black.html) | ~$250 |
 
 ---
 
@@ -37,8 +37,8 @@ A rugged, waterproof case containing an off-grid mesh network system with:
 | Item | Description | Source | Est. Price (CAD) |
 |------|-------------|--------|------------------|
 | **Heltec LoRa 32 V4 Meshtastic GPS ESP32** | Newer model | [Aliexpress](https://www.aliexpress.com/item/1005010017665425.html) | ~$40 |
-| **LilyGo T-Echo Meshtastic** | ESP32 + LoRa + GPS, pre-flashed Meshtastic | [LilyGo Store](https://lilygo.cc/products/t-echo-meshtastic?variant=45315790307509) | ~$48.49 |
-| **LilyGo T-Deck Plus Meshtastic** | ESP32-S3FN16R8 Dual-core LX7 microprocessor | [LilyGo Store](https://lilygo.cc/products/t-deck-plus-meshtastic?variant=45315795845301) | ~$77.16 |
+| **LilyGo T-Echo Meshtastic** | ESP32 + LoRa + GPS, pre-flashed Meshtastic | [LilyGo Store](https://lilygo.cc/products/t-echo-meshtastic?variant=45315790307509) | ~$55 |
+| **LilyGo T-Deck Plus Meshtastic** | ESP32-S3FN16R8 Dual-core LX7 microprocessor | [LilyGo Store](https://lilygo.cc/products/t-deck-plus-meshtastic?variant=45315795845301) | ~$80 |
 
 **Important:** Use **915MHz** version for Canada (ISM band, license-free, encryption permitted)
 
@@ -46,8 +46,8 @@ A rugged, waterproof case containing an off-grid mesh network system with:
 
 | Item | Description | Source | Est. Price (CAD) |
 |------|-------------|--------|------------------|
-| **915MHz 10dBi Whip Antenna** | Ø20*900mm, N-Female 868-960MHz (915MHz) | [Aliexpress](https://www.aliexpress.com/item/1005006663842344.html) | ~$63.38 |
-| **UFL SMA Coax Cable SMA Female to U.FL** | Low Loss Extender 12inch (30cm) 5 Pack | [Amazon.ca](https://www.amazon.ca/dp/B098QH631G) | ~$11.59 |
+| **915MHz 10dBi Whip Antenna** | Ø20*900mm, N-Female 868-960MHz (915MHz) | [Aliexpress](https://www.aliexpress.com/item/1005006663842344.html) | ~$65 |
+| **UFL SMA Coax Cable SMA Female to U.FL** | Low Loss Extender 12inch (30cm) 5 Pack | [Amazon.ca](https://www.amazon.ca/dp/B098QH631G) | ~$10 |
 
 ---
 
@@ -57,10 +57,10 @@ A rugged, waterproof case containing an off-grid mesh network system with:
 
 | Item | Description | Source | Est. Price (CAD) |
 |------|-------------|--------|------------------|
-| **ECO-WORTHY Portable 12V 20Ah LiFePO4 Battery** | Compact, 4000+ cycles, built-in BMS | [Amazon.ca](https://www.amazon.ca/dp/B0CJFP3VW5) | ~$95 |
-| **ECO-WORTHY 12V Lithium Battery Charger 5A** | Portable with display | [Amazon.ca](https://www.amazon.ca/dp/B08T95FF8K) | ~$56 |
-| **10 Pack 5 Sizes Thermal Circuit Breakers** | 5A 10A 15A 20A 30A Circuit Breakers with Waterproof Button Caps | [Amazon.ca](https://www.amazon.ca/dp/B0DBPWF393) | ~$19 |
-| **Joinfworld Toggle Switch 12V DC** | SPST 2 Pin Waterproof Switch | [Amazon.ca](https://www.amazon.ca/dp/B09SCXKKY2) | ~$10 |
+| **ECO-WORTHY Portable 12V 20Ah LiFePO4 Battery** | Compact, 4000+ cycles, built-in BMS | [Amazon.ca](https://www.amazon.ca/dp/B0CJFP3VW5) | ~$110 |
+| **ECO-WORTHY 12V Lithium Battery Charger 5A** | Portable with display | [Amazon.ca](https://www.amazon.ca/dp/B08T95FF8K) | ~$60 |
+| **10 Pack 5 Sizes Thermal Circuit Breakers** | 5A 10A 15A 20A 30A Circuit Breakers with Waterproof Button Caps | [Amazon.ca](https://www.amazon.ca/dp/B0DBPWF393) | ~$25 |
+| **Joinfworld Toggle Switch 12V DC** | SPST 2 Pin Waterproof Switch | [Amazon.ca](https://www.amazon.ca/dp/B09SCXKKY2) | ~$15 |
 
 **Runtime Estimate:** Pi 5 (~5W) + LoRa node (~0.5W) + WiFi AP = ~8-10W total → 20Ah @ 12V = ~24+ hours runtime
 
@@ -68,7 +68,7 @@ A rugged, waterproof case containing an off-grid mesh network system with:
 
 | Item | Description | Source | Est. Price (CAD) |
 |------|-------------|--------|------------------|
-| **2-Pack DC 12V/24V to 5V USB C Buck Converter** | 3A/15W, waterproof | [Amazon.com](https://www.amazon.ca/dp/B0BNQ5JNWZ) | ~$18 |
+| **2-Pack DC 12V/24V to 5V USB C Buck Converter** | 3A/15W, waterproof | [Amazon.com](https://www.amazon.ca/dp/B0BNQ5JNWZ) | ~$20 |
 
 ### Solar Charging (Optional but recommended)
 
@@ -89,11 +89,11 @@ A rugged, waterproof case containing an off-grid mesh network system with:
 
 | Category | Est. Cost (CAD) |
 |----------|-----------------|
-| Case | ~$100 |
-| Computing | ~$200 |
+| Case | ~$115 |
+| Computing | ~$250 |
 | LoRa | ~$250 |
-| Electrical | $200-300 (200$ without solar option) |
-| **TOTAL (Essential)** | **$750-850** |
+| Electrical | $230-350 (230$ without solar option) |
+| **TOTAL (Essential)** | **$845-965** |
 
 ---
 
