@@ -27,6 +27,7 @@ A rugged, waterproof case containing an off-grid mesh network system with:
 | Item | Description | Source | Est. Price (CAD) |
 |------|-------------|--------|------------------|
 | **Raspberry Pi 5 4GB Starter Kit** | 2.4GHz quad-core, with active cooler and storage, runs MeshMonitor for offline map with GPS | [CanaKit](https://www.canakit.com/canakit-raspberry-pi-5-starter-kit-turbine-black.html) | ~$250 |
+| **7 Inch LCD Touch Screen** | 1024x600 IPS Display with Stand, HDMI Portable Monitor | [Amazon.ca](https://www.amazon.ca/gp/product/B0CRRB1GFN) | ~$55 |
 
 ---
 
@@ -93,7 +94,7 @@ A rugged, waterproof case containing an off-grid mesh network system with:
 | Computing | ~$250 |
 | LoRa | ~$250 |
 | Electrical | $230-350 (230$ without solar option) |
-| **TOTAL (Essential)** | **$845-965** |
+| **TOTAL (Essential)** | **$900-1020** |
 
 ---
 
