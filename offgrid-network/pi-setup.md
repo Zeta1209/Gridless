@@ -26,94 +26,89 @@ This setup provides:
 
 ## Installation Steps
 
-### 1. Install Raspberry Pi OS Lite
+### 1. Install Raspberry Pi OS with Desktop
 
-Start with Lite to avoid unnecessary defaults and keep the system lean.
+Use the standard **Raspberry Pi OS with Desktop** image (not Lite). This avoids dependency issues with manual desktop installation.
 
-### 2. Install Desktop Environment and Display Manager
+### 2. Switch from Wayland to X11
 
-```bash
-sudo apt update
-sudo apt install raspberrypi-ui-mods lightdm
-```
-
-This installs:
-- LXDE desktop
-- Panel and window manager
-- LightDM display manager
-
-### 3. Enable Automatic GUI Start
-
-```bash
-sudo systemctl set-default graphical.target
-sudo systemctl enable lightdm
-```
-
-The desktop will now appear automatically on boot — no keyboard required.
-
-### 4. Configure Display Reliability
-
-Edit the boot configuration:
-
-```bash
-sudo nano /boot/config.txt
-```
-
-Add the following line:
-
-```
-hdmi_force_hotplug=1
-```
-
-This ensures the screen works even if powered on slightly after the Pi boots.
-
-### 5. Enable Auto-Login
+Onboard does not work properly under Wayland. You must switch to X11:
 
 ```bash
 sudo raspi-config
 ```
 
+Navigate to: **Advanced Options → Wayland → X11**
+
+### 3. Enable Auto-Login
+
 Navigate to: **System Options → Boot / Auto Login → Desktop Autologin**
 
 This eliminates password prompts that would be difficult without a keyboard.
+
+Reboot after changing:
+
+```bash
+sudo reboot
+```
 
 ---
 
 ## On-Screen Keyboard Setup
 
-### Install Onboard
-
-Onboard is the best on-screen keyboard for touch interfaces on Raspberry Pi.
+### Install Onboard and Accessibility Services
 
 ```bash
-sudo apt install onboard
+sudo apt update
+sudo apt install onboard at-spi2-core
 ```
 
-### Configure the Floating Button
+The `at-spi2-core` package enables the accessibility bus, which is required for auto-show functionality.
 
-Start Onboard once (via SSH or temporary keyboard):
+### Configure Onboard
+
+Start Onboard:
 
 ```bash
 onboard &
 ```
 
-Open Onboard Preferences and configure:
+Open Onboard **Preferences** and configure:
 
 **General tab:**
-- ✅ Enable "Show floating icon"
-- ❌ Disable "Auto-show when editing text" (optional, can be annoying)
+- ✅ Enable "Show floating icon when Onboard is hidden"
+- ✅ Enable "Auto-show when editing text" (keyboard appears automatically in text fields)
 
 **Window tab:**
-- Set Docking to "Floating"
-- ✅ Enable "Keep window on top"
+- ✅ Enable "Dock to screen edge"
+- Set edge to "Bottom"
+- ✅ Enable "Expand to landscape/portrait"
+- ❌ Disable "Window decoration" (removes title bar with minimize/maximize/close buttons)
+- ✅ Enable "Force to top" (keeps keyboard above other windows)
 
-**Recommended polish:**
-- ✅ Enable "Lock position" to prevent accidental moves
-- Set opacity to 30–40% for a subtle but visible button
+### Position the Floating Icon
+
+By default the floating icon appears in the top-left. To move it to the top-right corner:
+
+```bash
+dconf write /org/onboard/icon-palette/landscape/x 95.0
+dconf write /org/onboard/icon-palette/landscape/y 5.0
+dconf write /org/onboard/icon-palette/portrait/x 95.0
+dconf write /org/onboard/icon-palette/portrait/y 5.0
+```
+
+Values are percentages (0-100) of screen position. Adjust as needed.
+
+Restart Onboard to apply:
+
+```bash
+pkill onboard
+onboard &
+```
 
 ### Enable Auto-Start on Boot
 
-Create the autostart directory and desktop entry:
+Create the autostart entry:
 
 ```bash
 mkdir -p ~/.config/autostart
@@ -132,7 +127,7 @@ X-GNOME-Autostart-enabled=true
 Name=Onboard
 ```
 
-Save and reboot. The floating keyboard button will now appear automatically.
+Save (Ctrl+X, Y, Enter) and reboot.
 
 ---
 
@@ -140,24 +135,54 @@ Save and reboot. The floating keyboard button will now appear automatically.
 
 After setup, every boot will:
 
-1. Start the desktop automatically
-2. Display a small semi-transparent floating button
-3. Tap the button → keyboard slides in
-4. Tap again → keyboard hides
-5. Button always stays accessible and on top
+1. Desktop starts automatically (X11 session)
+2. Onboard launches with a small floating icon
+3. Tap a text field → keyboard slides up from bottom
+4. Tap the X on keyboard → keyboard hides, floating icon remains
+5. Tap floating icon → keyboard reappears
+
+---
+
+## Troubleshooting
+
+### Keyboard doesn't type or dock properly
+
+You're likely running Wayland instead of X11. Check with:
+
+```bash
+echo $XDG_SESSION_TYPE
+```
+
+If it says `wayland`, switch to X11 via `raspi-config` (see Installation Steps).
+
+### Floating icon position doesn't change
+
+Settings are stored in dconf. View current settings with:
+
+```bash
+dconf dump /org/onboard/
+```
+
+Reset all settings if needed:
+
+```bash
+dconf reset -f /org/onboard/
+```
+
+### Warnings about XInput or accessibility bus
+
+These warnings are normal when running via SSH (tty session). They should not appear when Onboard runs in the actual desktop session.
 
 ---
 
 ## Resource Usage
-
-Running the GUI does consume some resources, but it's a worthwhile tradeoff for boot safety:
 
 | Metric | Typical Value |
 |--------|---------------|
 | Idle RAM | ~300–400 MB |
 | CPU | Nearly idle |
 
-This is acceptable on Pi 3/4/5 and prevents "bricked-until-SSH" situations.
+This is acceptable on Pi 3/4/5.
 
 ---
 
@@ -167,9 +192,9 @@ This is acceptable on Pi 3/4/5 and prevents "bricked-until-SSH" situations.
 sudo raspi-config
 ```
 
-Consider enabling:
+Consider:
 - Disable screen blanking (keeps display always on)
-- Increase UI scaling if using a small screen (5" or 7")
+- Increase UI scaling for small screens (5" or 7")
 
 ---
 
@@ -180,18 +205,20 @@ Other on-screen keyboards (Matchbox-keyboard, Florence, etc.) have limitations:
 - Unpredictable auto-popup behavior
 - Poor touch ergonomics
 
-Onboard is the only option that provides the "assistive floating button" UX similar to iOS.
+Onboard is the only option that provides the "assistive floating button" UX similar to iOS AssistiveTouch.
 
 ---
 
 ## Summary Checklist
 
-- [x] GUI auto-starts on boot
-- [x] Touchscreen replaces mouse and keyboard
-- [x] Floating translucent shortcut button
-- [x] Keyboard hidden unless needed
-- [x] Safe after power cycles
-- [x] No manual commands required
+- [x] Raspberry Pi OS with Desktop installed
+- [x] X11 display server (not Wayland)
+- [x] Desktop auto-login enabled
+- [x] Onboard installed with at-spi2-core
+- [x] Floating icon enabled and positioned
+- [x] Keyboard docked to bottom edge
+- [x] Auto-show on text field focus
+- [x] Onboard auto-starts on boot
 
 ---
 
