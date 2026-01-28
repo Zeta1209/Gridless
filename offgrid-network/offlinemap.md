@@ -50,6 +50,7 @@ Update the system:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
+sudo apt install epiphany-browser
 sudo reboot
 ```
 
