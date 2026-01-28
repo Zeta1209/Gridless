@@ -18,7 +18,11 @@ This setup creates a self-contained base station that:
 - Heltec WiFi LoRa 32 V3 (or similar Meshtastic node with WiFi)
 - Optional: Touchscreen display (HDMI or DSI)
 
-## Part 1: Raspberry Pi Initial Setup
+---
+
+## Part 1: Get Started Now (No LoRa Hardware Needed)
+
+These steps can be completed while waiting for your LoRa hardware to arrive. They're node-independent and will save you significant time later.
 
 ### 1.1 Flash Raspberry Pi OS
 
@@ -57,14 +61,14 @@ sudo reboot
 ### 1.3 Install Docker
 
 ```bash
-# Install Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
-
-# Add your user to docker group (avoids needing sudo)
 sudo usermod -aG docker $USER
+```
 
-# Log out and back in for group change to take effect
+Log out and back in for group change to take effect:
+
+```bash
 exit
 ```
 
@@ -75,7 +79,47 @@ docker --version
 docker run hello-world
 ```
 
+### 1.4 Download Your Offline Map Tiles
+
+This is the most time-consuming part and requires no LoRa hardware.
+
+Download pre-made regional tiles from MapTiler:
+https://www.maptiler.com/on-prem-datasets/dataset/osm/#0.22/0/0
+
+1. Create a free account
+2. Download the tileset for your region (e.g., Quebec or a smaller area)
+3. Transfer to your Pi
+
+### 1.5 Set Up TileServer GL Light
+
+You can run just the tile server portion to verify your maps work:
+
+```bash
+mkdir -p ~/meshmonitor/tiles
+cd ~/meshmonitor
+
+cat > docker-compose.yml << 'EOF'
+services:
+  tileserver:
+    image: maptiler/tileserver-gl-light:latest
+    container_name: tileserver
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./tiles:/data
+    restart: unless-stopped
+EOF
+
+docker compose up -d
+```
+
+Then browse to `http://meshstation.local:8081` to confirm your tiles render correctly.
+
+---
+
 ## Part 2: Configure Your Meshtastic Node
+
+*Continue here once your LoRa hardware arrives.*
 
 Your Heltec LoRa node needs WiFi enabled so MeshMonitor can connect to it.
 
@@ -111,9 +155,13 @@ Since your base station won't have GPS, set a fixed position:
 meshtastic --setlat 45.5678 --setlon -73.1234 --setalt 150
 ```
 
+---
+
 ## Part 3: Install MeshMonitor
 
 ### 3.1 Create Project Directory
+
+If you already set up TileServer in Part 1, skip this step:
 
 ```bash
 mkdir -p ~/meshmonitor
@@ -122,117 +170,11 @@ cd ~/meshmonitor
 
 ### 3.2 Create Docker Compose File
 
-```bash
-cat > docker-compose.yml << 'EOF'
-services:
-  meshmonitor:
-    image: ghcr.io/yeraze/meshmonitor:latest
-    container_name: meshmonitor
-    ports:
-      - "8080:3001"
-    volumes:
-      - meshmonitor-data:/data
-      - ./tiles:/tiles:ro
-    environment:
-      - MESHTASTIC_NODE_IP=192.168.1.150  # Change to your node's IP
-    restart: unless-stopped
-
-volumes:
-  meshmonitor-data:
-EOF
-```
-
-**Important:** Replace `192.168.1.150` with your Meshtastic node's actual IP address.
-
-### 3.3 Start MeshMonitor
-
-```bash
-docker compose up -d
-```
-
-Verify it's running:
-
-```bash
-docker compose logs -f
-# Press Ctrl+C to exit logs
-```
-
-### 3.4 Access MeshMonitor
-
-From any device on the same network, open a browser and go to:
-
-```
-http://meshstation.local:8080
-```
-
-Or use the Pi's IP address directly.
-
-**Default login:** `admin` / `changeme`
-
-**Change the password immediately** via Settings → User Management.
-
-## Part 4: Download Offline Map Tiles
-
-MeshMonitor supports custom tile servers for offline maps. We'll download OSM tiles for your region.
-
-### 4.1 Method A: Using HOT Export Tool (Easiest)
-
-This method downloads raster tiles in MBTiles format.
-
-1. Go to https://export.hotosm.org/
-2. Create an OpenStreetMap account if needed
-3. Draw a polygon around your chalet area (include surrounding wilderness)
-4. Select **MBTiles** as the export format
-5. Choose zoom levels 8-14 (good balance of coverage and detail)
-6. Submit and wait for the download link (you'll get an email)
-7. Download the `.mbtiles` file
-
-Transfer to your Pi:
-
-```bash
-# From your computer
-scp ~/Downloads/your-export.mbtiles mesh@meshstation.local:~/meshmonitor/tiles/
-```
-
-### 4.2 Method B: Using tile-downloader (More Control)
-
-Install Python and download tiles directly:
-
-```bash
-# On the Pi
-pip install tile-downloader --break-system-packages
-
-# Download tiles for a specific bounding box
-# Format: West, South, East, North (longitude, latitude)
-# Example for an area in Quebec:
-tile-downloader \
-  --url "https://tile.openstreetmap.org/{z}/{x}/{y}.png" \
-  --bbox "-74.5,45.0,-72.5,47.0" \
-  --zoom "8-14" \
-  --output ~/meshmonitor/tiles/quebec.mbtiles
-```
-
-**Note:** Be respectful of OSM tile usage policies. Download once and use locally.
-
-### 4.3 Method C: Download Pre-made Regional Tiles
-
-MapTiler offers free downloads for personal use:
-
-1. Go to https://data.maptiler.com/downloads/tileset/osm/north-america/canada/quebec/
-2. Create a free account
-3. Download the Quebec tileset (or a smaller region)
-4. Transfer to your Pi
-
-## Part 5: Configure MeshMonitor for Offline Tiles
-
-### 5.1 Set Up TileServer GL Light
-
-We'll run a lightweight tile server alongside MeshMonitor:
+Update your docker-compose.yml to include MeshMonitor alongside the tile server:
 
 ```bash
 cd ~/meshmonitor
 
-# Update docker-compose.yml to include tile server
 cat > docker-compose.yml << 'EOF'
 services:
   meshmonitor:
@@ -262,14 +204,86 @@ volumes:
 EOF
 ```
 
-### 5.2 Restart Services
+**Important:** Replace `192.168.1.150` with your Meshtastic node's actual IP address.
+
+### 3.3 Start MeshMonitor
 
 ```bash
-docker compose down
+docker compose down  # Stop existing services if running
 docker compose up -d
 ```
 
-### 5.3 Configure MeshMonitor to Use Local Tiles
+Verify it's running:
+
+```bash
+docker compose logs -f
+# Press Ctrl+C to exit logs
+```
+
+### 3.4 Access MeshMonitor
+
+From any device on the same network, open a browser and go to:
+
+```
+http://meshstation.local:8080
+```
+
+Or use the Pi's IP address directly.
+
+**Default login:** `admin` / `changeme`
+
+**Change the password immediately** via Settings → User Management.
+
+---
+
+## Part 4: Additional Offline Map Options
+
+If you need more control over your map tiles, here are alternative methods:
+
+### 4.1 Method A: Using HOT Export Tool
+
+This method downloads raster tiles in MBTiles format.
+
+1. Go to https://export.hotosm.org/
+2. Create an OpenStreetMap account if needed
+3. Draw a polygon around your chalet area (include surrounding wilderness)
+4. Select **MBTiles** as the export format
+5. Choose zoom levels 8-14 (good balance of coverage and detail)
+6. Submit and wait for the download link (you'll get an email)
+7. Download the `.mbtiles` file
+
+Transfer to your Pi:
+
+```bash
+# From your computer
+scp ~/Downloads/your-export.mbtiles mesh@meshstation.local:~/meshmonitor/tiles/
+```
+
+### 4.2 Method B: Using tile-downloader
+
+Install Python and download tiles directly:
+
+```bash
+# On the Pi
+pip install tile-downloader --break-system-packages
+
+# Download tiles for a specific bounding box
+# Format: West, South, East, North (longitude, latitude)
+# Example for an area in Quebec:
+tile-downloader \
+  --url "https://tile.openstreetmap.org/{z}/{x}/{y}.png" \
+  --bbox "-74.5,45.0,-72.5,47.0" \
+  --zoom "8-14" \
+  --output ~/meshmonitor/tiles/quebec.mbtiles
+```
+
+**Note:** Be respectful of OSM tile usage policies. Download once and use locally.
+
+---
+
+## Part 5: Configure MeshMonitor for Offline Tiles
+
+### 5.1 Configure MeshMonitor to Use Local Tiles
 
 1. Open MeshMonitor in your browser: `http://meshstation.local:8080`
 2. Go to **Settings** → **Map Settings** (or similar)
@@ -279,7 +293,7 @@ docker compose up -d
    - Or for raw tiles: `http://meshstation.local:8081/data/v3/{z}/{x}/{y}.pbf`
 4. Save and refresh the map
 
-### 5.4 Alternative: Direct XYZ Tile Directory
+### 5.2 Alternative: Direct XYZ Tile Directory
 
 If your tiles are in standard XYZ directory format (z/x/y.png), you can serve them with nginx:
 
@@ -301,6 +315,8 @@ docker compose up -d
 ```
 
 Then configure MeshMonitor to use: `http://meshstation.local:8082/tiles/{z}/{x}/{y}.png`
+
+---
 
 ## Part 6: Optional - Touchscreen Kiosk Mode
 
@@ -377,6 +393,8 @@ Reboot to test:
 sudo reboot
 ```
 
+---
+
 ## Part 7: Network Configuration for Field Use
 
 ### 7.1 Create a Local Access Point (Optional)
@@ -400,6 +418,8 @@ sudo nmcli con mod "Wired connection 1" ipv4.gateway 192.168.1.1
 sudo nmcli con mod "Wired connection 1" ipv4.dns "192.168.1.1"
 sudo nmcli con mod "Wired connection 1" ipv4.method manual
 ```
+
+---
 
 ## Maintenance Commands
 
@@ -434,6 +454,8 @@ docker run --rm -v meshmonitor_meshmonitor-data:/data -v ~/backups:/backup \
   alpine tar czf /backup/meshmonitor-backup-$(date +%Y%m%d).tar.gz /data
 ```
 
+---
+
 ## Troubleshooting
 
 ### MeshMonitor can't connect to Meshtastic node
@@ -462,6 +484,8 @@ docker run --rm -v meshmonitor_meshmonitor-data:/data -v ~/backups:/backup \
 2. Use raster tiles instead of vector tiles
 3. Limit the geographic area of downloaded tiles
 
+---
+
 ## Quick Reference
 
 | Service | URL | Port |
@@ -474,6 +498,8 @@ docker run --rm -v meshmonitor_meshmonitor-data:/data -v ~/backups:/backup \
 |---------------------|--|
 | MeshMonitor | admin / changeme |
 | Pi SSH | mesh / (your password) |
+
+---
 
 ## Summary
 
