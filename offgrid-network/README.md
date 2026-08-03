@@ -4,8 +4,11 @@ Refonte complète du projet avec :
 - **MeshMonitor mis à jour** vers l'architecture multi-sources (v4.x) — l'ancienne config à une seule IP est dépréciée
 - **Point d'accès Wi-Fi autonome sur le Pi** : le Heltec et le Pi forment leur propre réseau, sans dépendre du Wi-Fi de la maison ou d'ailleurs
 - **Clavier Bluetooth** pour piloter le Raspberry Pi sans clavier filaire
-- **Mode Kiosque restreint** : le navigateur ne peut ouvrir QUE MeshMonitor et Wikipedia hors-ligne (Kiwix), rien d'autre
+- **Mode Kiosque restreint** : le navigateur ne peut ouvrir QUE MeshMonitor et Wikipedia hors-ligne (Kiwix), rien d'autre — imposé au niveau réseau (proxy filtrant) plutôt que par une politique Chromium qui s'est avérée cassée sur Debian Trixie
 - **Wikipedia hors-ligne (Kiwix)**, absent des guides précédents mais nécessaire pour le kiosque
+- **Procédure de mise à jour du système** (Partie 9), via un branchement Ethernet temporaire
+
+Ce guide a été testé et corrigé de bout en bout — chaque étape reflète la méthode qui fonctionne réellement, pas juste la théorie. Suivez-le dans l'ordre pour une installation reproductible.
 
 Ce guide remplace entièrement les trois anciens documents (meshtastic.md, meshmonitor.md, offlinemap.md).
 
@@ -72,7 +75,9 @@ sudo reboot
 ```bash
 sudo raspi-config
 ```
-Naviguez vers **System Options → Boot / Auto Login → Desktop Autologin**, puis rebootez.
+Naviguez vers **System Options → Boot / Auto Login → Console Autologin** (⚠️ **pas** "Desktop Autologin"). Le script de kiosque (Partie 7) démarre sa propre session graphique via `startx` depuis une console texte — avec "Desktop Autologin", vous atterrissez directement dans un bureau graphique complet qui ne déclenche jamais ce script, et vous verrez juste le bureau normal au démarrage au lieu du kiosque.
+
+Rebootez après le changement.
 
 ### 1.4 Installer Docker
 
@@ -212,6 +217,32 @@ sudo nmcli connection up MeshStation-AP
 
 Le Pi est maintenant joignable sur `192.168.4.1`, et diffuse un réseau Wi-Fi `MeshStation`.
 
+⚠️ **Étape critique — empêcher `wlan0` de retomber sur le Wi-Fi de la maison.** Par défaut, votre ancien profil Wi-Fi maison (créé par `raspi-config`/netplan lors de l'installation, ex : `netplan-wlan0-Anteverse_2.4GHz`) reste actif avec `autoconnect yes`. NetworkManager peut alors **automatiquement redonner `wlan0` à ce profil** après certains événements système (un `raspi-config`, un reboot, un changement de pays Wi-Fi) — le point d'accès `MeshStation` disparaît alors silencieusement, sans erreur visible, et le Heltec ne peut évidemment plus s'y connecter. C'est un piège facile à ne jamais remarquer puisque le Pi lui-même reste joignable (juste sur un réseau différent).
+
+Désactivez l'auto-connexion de l'ancien profil et donnez une priorité forte au point d'accès :
+
+```bash
+nmcli connection show
+```
+Repérez le nom exact de votre profil Wi-Fi maison dans la liste (souvent `netplan-wlan0-<SSID>` ou juste le nom du SSID), puis :
+
+```bash
+sudo nmcli connection modify <nom-du-profil-maison> autoconnect no
+sudo nmcli connection modify MeshStation-AP connection.autoconnect yes
+sudo nmcli connection modify MeshStation-AP connection.autoconnect-priority 100
+sudo nmcli connection up MeshStation-AP
+```
+
+**Vérifiez que ça tient après un reboot complet** — c'est le vrai test :
+```bash
+sudo reboot
+```
+Puis, après reboot :
+```bash
+iw dev wlan0 info
+```
+Vous devez voir `type AP` et `ssid MeshStation`. Si ça montre `type managed` avec un autre SSID, l'ancien profil a repris la main — revérifiez qu'`autoconnect no` a bien été appliqué (`nmcli connection show <nom-du-profil-maison> | grep autoconnect`).
+
 ### 3.4 Réserver une IP fixe pour le Heltec sur ce réseau
 
 Pour que le Heltec ait toujours la même IP (nécessaire pour que MeshMonitor le retrouve après chaque redémarrage), on réserve une adresse par son adresse MAC (visible dans le `--info` de la Partie 3.2, champ `macaddr`) :
@@ -283,6 +314,7 @@ Si ça répond, le Heltec est bien joignable sur son IP fixe — c'est celle-ci 
 | L'IP du Heltec n'est pas 192.168.4.50 | Vérifiez que la MAC dans `heltec.conf` correspond bien à celle du nœud (`--info` → `macaddr`) |
 | `nmcli` dit que le point d'accès ne démarre pas | Vérifiez que le Wi-Fi du Pi n'est pas bloqué : `rfkill list`, puis `rfkill unblock wifi` |
 | SSH coupé juste après avoir activé le point d'accès | Normal — une seule radio Wi-Fi ne peut pas être cliente + AP en même temps. Reconnectez-vous via `ssh mesh@192.168.4.1` en rejoignant le réseau `MeshStation`, ou utilisez l'Ethernet (voir avertissement Partie 3.3) |
+| Le point d'accès fonctionnait puis a disparu sans raison, `iw dev wlan0 info` montre `type managed` avec le SSID de la maison | `wlan0` est retombé sur l'ancien profil Wi-Fi maison — vérifiez `autoconnect no` sur ce profil et la priorité sur `MeshStation-AP` (voir la mise en garde à la fin de la Partie 3.3) |
 | `ECONNREFUSED` sur le port 4403 juste après un reboot du nœud | Normal — attendez 30-60s de plus, le serveur API démarre après l'association Wi-Fi (voir 3.6) |
 | MeshMonitor ne se connecte plus au nœud | `ping 192.168.4.50` puis `nc -zv 192.168.4.50 4403` pour tester le port TCP |
 | Je veux redonner le nœud en USB direct à un ordi | Aucun problème — le Wi-Fi et l'USB ne sont pas exclusifs, le nœud répond aux deux |
@@ -382,6 +414,10 @@ Si `docker compose ps` montre `kiwix` et/ou `tileserver` en `Restarting` juste a
 
 TileServer GL Light gère maintenant **à la fois les tuiles vectorielles (.pbf) et raster (.png)** — plus besoin de choisir une image "Full" avec des dépendances fragiles (`sharp`).
 
+⚠️ **Limite importante : un seul `.mbtiles` à la fois en mode auto-détection.** Sans fichier `config.json`, TileServer GL Light ne scanne fiablement qu'**un seul** fichier `.mbtiles` présent dans `~/meshmonitor/tiles/` — s'il y en a plusieurs, seul l'un d'eux (pas nécessairement celui voulu) sera servi, et les autres seront silencieusement ignorés. Deux options :
+- **Simple** : ne gardez qu'un seul fichier `.mbtiles` dans le dossier (ex : votre région complète)
+- **Plusieurs régions/tilesets** : créez un `config.json` explicite listant chaque fichier (voir 5.4)
+
 ### 5.1 Télécharger des tuiles
 
 - Vectorielles (recommandé, plus léger) : [MapTiler OSM](https://www.maptiler.com/on-prem-datasets/)
@@ -399,6 +435,10 @@ http://192.168.4.1:8081
 
 **Settings → Map Settings → Custom Tile Servers → + Add Custom Tile Server**
 
+⚠️ **Utilisez `192.168.4.1` (pas `localhost`) dans l'URL** — c'est votre navigateur qui va chercher les tuiles directement (pas le conteneur MeshMonitor côté serveur), donc il faut une adresse que le navigateur peut réellement joindre. `localhost` ne fonctionne que si vous accédez à l'interface depuis le Pi lui-même (ex : mode kiosque).
+
+⚠️ **Le `v3` dans les URLs ci-dessous n'est PAS un numéro de version** — c'est simplement le nom de la source telle que nommée dans un `config.json` d'exemple de la documentation officielle. En mode auto-détection (sans `config.json`), le nom réel de la source dépend de l'implémentation et peut différer. Si l'URL avec `v3` ne fonctionne pas, vérifiez le nom exact via l'interface `http://192.168.4.1:8081` (section **Data**) ou utilisez un `config.json` explicite (5.4) où **vous choisissez vous-même** ce nom.
+
 Pour des tuiles **vectorielles** :
 ```
 Name: Local Vector Tiles
@@ -415,7 +455,42 @@ Attribution: © OpenStreetMap contributors
 Max Zoom: 18
 ```
 
-Sauvegardez, puis sélectionnez le tileset dans le menu déroulant **Map Tileset**.
+Cliquez **Save**.
+
+**Sélectionner le tileset actif :** le choix est maintenant séparé pour les modes clair et sombre — un **Light Mode Tileset** et un **Dark Mode Tileset** distincts, chacun appliqué automatiquement selon le thème actif. Toujours dans **Map Settings**, sélectionnez votre tileset custom dans les deux menus déroulants si vous voulez qu'il s'applique peu importe le thème.
+
+### 5.4 (Optionnel) Servir plusieurs fichiers .mbtiles avec un config.json explicite
+
+Si vous voulez plusieurs régions/tilesets en même temps, créez un fichier `config.json` dans `~/meshmonitor/tiles/` qui liste chaque fichier explicitement — c'est la méthode fiable, contrairement à l'auto-détection :
+
+```bash
+cat > ~/meshmonitor/tiles/config.json << 'EOF'
+{
+  "options": {
+    "paths": {
+      "root": "",
+      "mbtiles": ""
+    }
+  },
+  "data": {
+    "canada": {
+      "mbtiles": "osm-2020-02-10-v3.11_north-america_canada.mbtiles"
+    },
+    "autre-region": {
+      "mbtiles": "nom-du-deuxieme-fichier.mbtiles"
+    }
+  }
+}
+EOF
+
+cd ~/meshmonitor
+docker compose restart tileserver
+```
+
+L'URL dans MeshMonitor utilise alors le nom **que vous avez choisi** comme clé (`canada`, `autre-region`), pas `v3` :
+```
+http://192.168.4.1:8081/data/canada/{z}/{x}/{y}.pbf
+```
 
 ---
 
@@ -464,8 +539,44 @@ C'est le cœur de la demande : un écran qui **ne peut afficher que MeshMonitor 
 
 ```bash
 sudo apt install -y --no-install-recommends \
-  xserver-xorg x11-xserver-utils xinit openbox \
-  chromium-browser unclutter
+  xserver-xorg xserver-xorg-legacy x11-xserver-utils xinit openbox \
+  chromium unclutter
+```
+
+⚠️ **Nom du paquet variable selon la version de Raspberry Pi OS** : sur les versions récentes, le navigateur s'appelle `chromium` (pas `chromium-browser`). Vérifiez lequel est réellement installé avant de continuer :
+```bash
+command -v chromium chromium-browser
+```
+Utilisez le nom qui répond dans toutes les commandes ci-dessous — ce guide utilise `chromium`, ajustez si nécessaire.
+
+### 7.1bis Autoriser X à démarrer sans les droits root (Raspberry Pi OS récent)
+
+Sur les versions récentes de Raspberry Pi OS (Debian Trixie+), les utilisateurs normaux n'ont plus le droit de démarrer le serveur X par défaut — il faut l'autoriser explicitement, sinon vous aurez un écran noir ou une erreur `Cannot open /dev/tty0 (Permission denied)` :
+
+```bash
+sudo nano /etc/X11/Xwrapper.config
+```
+
+Assurez-vous que le fichier contient :
+```
+allowed_users=anybody
+needs_root_rights=yes
+```
+
+Puis ajoutez votre utilisateur aux bons groupes :
+```bash
+sudo usermod -aG tty,video $USER
+```
+
+**Important : testez `startx` uniquement depuis l'écran physique du Pi, jamais par SSH** — SSH n'a pas accès à un vrai terminal (`/dev/tty0`), donc un test par SSH échouera toujours avec une erreur qui n'a rien à voir avec un vrai problème.
+
+### 7.1ter Installer les polices (icônes/emojis)
+
+Sans ça, les icônes 📡📖 de la page de lancement (Partie 7.2) ne s'affichent pas :
+
+```bash
+sudo apt install -y fontconfig fonts-dejavu fonts-noto-color-emoji
+sudo fc-cache -f
 ```
 
 ### 7.2 Créer la page de lancement locale
@@ -498,43 +609,73 @@ cat > ~/kiosk/launcher.html << 'EOF'
 EOF
 ```
 
-### 7.3 Restreindre Chromium via une politique gérée (URLAllowlist)
+⚠️ **Ne pas ouvrir ce fichier directement en `file://` dans Chromium** — le filtrage d'URL de la Partie 7.3 gère mal ce schéma. Le script de la Partie 7.4 sert cette page via un petit serveur HTTP local (`http://localhost:8090`) à la place, ce qui évite complètement le problème.
 
-C'est ce qui empêche réellement de sortir des deux applications autorisées, même via un raccourci clavier ou un lien externe.
+### 7.3 Restreindre le navigateur au niveau réseau (proxy filtrant)
+
+⚠️ **Pourquoi pas la politique Chromium `URLBlocklist`/`URLAllowlist` ?** C'est l'approche officiellement documentée par Google/Chromium, mais un **bug confirmé du paquet `chromium` de Debian Trixie** (introduit mi-2025, toujours présent) fait que ces politiques s'affichent bien dans `chrome://policy` mais **ne sont pas réellement appliquées** — le navigateur bloque de façon incohérente, y compris ses propres URLs pourtant listées dans l'allowlist. Plutôt que de dépendre d'un mécanisme cassé côté navigateur, on impose la restriction **au niveau du système** avec un proxy filtrant local (`tinyproxy`) : Chromium n'a alors plus aucun rôle à jouer dans le blocage, c'est Linux qui l'impose, indépendamment de tout bug de Chromium.
+
+#### Installer et configurer tinyproxy
 
 ```bash
-sudo mkdir -p /etc/chromium/policies/managed
-sudo tee /etc/chromium/policies/managed/policies.json > /dev/null << 'EOF'
-{
-  "URLBlocklist": ["*"],
-  "URLAllowlist": [
-    "http://localhost:3001/*",
-    "http://localhost:8082/*",
-    "file:///home/mesh/kiosk/*"
-  ],
-  "IncognitoModeAvailability": 1,
-  "DeveloperToolsAvailability": 2,
-  "BrowserAddPersonEnabled": false,
-  "BrowserGuestModeEnabled": false,
-  "TranslateEnabled": false,
-  "DefaultBrowserSettingEnabled": false
-}
+sudo apt install -y tinyproxy
+```
+
+Créer la liste de filtrage (schéma complet inclus, requis avec `FilterURLs`) :
+```bash
+sudo tee /etc/tinyproxy/filter > /dev/null << 'EOF'
+^http://localhost:3001
+^http://localhost:8082
+^http://localhost:8090
+^http://127\.0\.0\.1:3001
+^http://127\.0\.0\.1:8082
+^http://127\.0\.0\.1:8090
 EOF
 ```
 
-**Explication :**
-- `URLBlocklist: ["*"]` bloque absolument tout par défaut
-- `URLAllowlist` réautorise seulement MeshMonitor, Kiwix et la page de lancement locale (l'allowlist a priorité sur le blocklist)
-- `DeveloperToolsAvailability: 2` empêche l'ouverture des outils de développement (échappatoire classique)
-- `IncognitoModeAvailability: 1` désactive le mode navigation privée
+Éditer la config principale :
+```bash
+sudo nano /etc/tinyproxy/tinyproxy.conf
+```
 
-Adaptez `/home/mesh/kiosk/` si votre nom d'utilisateur diffère de `mesh`.
+Assurez-vous que ces lignes sont présentes (ajoutez-les si absentes, décommentez si présentes en commentaire) :
+```
+Port 8888
+Listen 127.0.0.1
+Allow 127.0.0.1
+Filter "/etc/tinyproxy/filter"
+FilterDefaultDeny Yes
+FilterURLs Yes
+```
+
+⚠️ **`FilterURLs Yes` est indispensable** — sans cette ligne, tinyproxy compare vos règles seulement contre le **nom d'hôte** (`localhost`), jamais le port ni le chemin, et vos règles ne correspondront jamais à rien.
+
+Redémarrer et activer au boot :
+```bash
+sudo systemctl restart tinyproxy
+sudo systemctl enable tinyproxy
+```
+
+#### Valider le filtrage avant de continuer
+
+```bash
+curl -x http://127.0.0.1:8888 http://localhost:3001
+curl -x http://127.0.0.1:8888 http://localhost:8082
+curl -x http://127.0.0.1:8888 http://localhost:8090/launcher.html
+curl -x http://127.0.0.1:8888 http://example.com
+```
+Les trois premiers doivent retourner du contenu normal ; le dernier (`example.com`) doit retourner une page **"403 Filtered"**. Ne continuez pas tant que ce test n'est pas concluant — ça évite de chasser un problème de navigateur qui serait en fait un problème de proxy.
 
 ### 7.4 Script de démarrage du kiosque
+
+Le script inclut : un serveur HTTP local pour la page de lancement, le proxy filtrant, et une **journalisation dans `~/kiosk.log`** — indispensable pour diagnostiquer si Chromium ne se lance pas ou plante silencieusement (écran noir).
 
 ```bash
 cat > ~/kiosk.sh << 'EOF'
 #!/bin/bash
+
+exec > ~/kiosk.log 2>&1
+echo "=== Kiosk starting: $(date) ==="
 
 xset s off
 xset s noblank
@@ -542,22 +683,39 @@ xset -dpms
 
 unclutter -idle 0.5 -root &
 
-# Attendre que les services Docker soient prêts
+# Servir la page de lancement en HTTP local (évite les soucis de filtrage file://)
+(cd ~/kiosk && python3 -m http.server 8090 --bind 127.0.0.1 &)
+
+# Attendre que les services Docker et le mini-serveur soient prêts
 sleep 15
 
-chromium-browser \
+echo "Launching browser..."
+
+chromium \
   --kiosk \
+  --proxy-server="127.0.0.1:8888" \
+  --proxy-bypass-list="<-loopback>" \
   --noerrdialogs \
   --disable-infobars \
   --disable-session-crashed-bubble \
   --disable-pinch \
   --overscroll-history-navigation=0 \
   --check-for-update-interval=604800 \
-  file:///home/mesh/kiosk/launcher.html
+  http://localhost:8090/launcher.html
+
+echo "Browser exited with code $?: $(date)"
 EOF
 
 chmod +x ~/kiosk.sh
 ```
+
+⚠️ Si votre système utilise `chromium-browser` plutôt que `chromium` (vérifié à l'étape 7.1), remplacez le nom dans ce script en conséquence. Le flag `--proxy-bypass-list="<-loopback>"` est requis — sans lui, Chromium contourne automatiquement le proxy pour `localhost`, ce qui rendrait le filtrage inutile.
+
+**En cas de problème**, consultez le log après un reboot :
+```bash
+cat ~/kiosk.log
+```
+Une ligne `command not found` indique un mauvais nom de paquet ; un code de sortie non nul juste après le lancement indique un plantage de Chromium — le message d'erreur juste au-dessus donne généralement la cause exacte.
 
 ### 7.5 Démarrage automatique au boot
 
@@ -576,9 +734,11 @@ Comme l'auto-login desktop est déjà activé (Partie 1.3), le kiosque se lance 
 sudo reboot
 ```
 
-### 7.6 Revenir au bureau normal (maintenance)
+### 7.6 Revenir au bureau normal (maintenance) / naviguer entre les deux apps
 
-Le clavier Bluetooth étant fonctionnel, vous pouvez fermer Chromium avec **Alt+F4**, ou vous connecter en SSH depuis un autre appareil pour faire de la maintenance sans toucher à l'écran.
+**Pour revenir à la page de lancement depuis MeshMonitor ou Kiwix** : même en mode `--kiosk` (barre d'adresse cachée), le raccourci **Alt + Flèche gauche** (retour en arrière dans l'historique) fonctionne avec le clavier Bluetooth.
+
+Le clavier Bluetooth étant fonctionnel, vous pouvez aussi fermer Chromium complètement avec **Alt+F4**, ou vous connecter en SSH depuis un autre appareil pour faire de la maintenance sans toucher à l'écran (`pkill chromium`, en ajustant le nom si votre paquet s'appelle `chromium-browser`).
 
 Pour désactiver temporairement le kiosque :
 ```bash
@@ -595,11 +755,17 @@ sudo reboot
 
 | Symptôme | Solution |
 |---|---|
-| Page "bloquée par votre administrateur" sur MeshMonitor/Kiwix | Vérifiez que le port dans l'URL correspond exactement à `URLAllowlist` (3001 pour MeshMonitor, 8082 pour Kiwix) |
-| Le kiosque se lance sur un écran noir | Augmentez le `sleep 15` dans kiosk.sh — Docker n'a peut-être pas fini de démarrer |
-| Impossible de fermer Chromium | Utilisez SSH depuis un autre appareil : `ssh mesh@meshstation.local` puis `pkill chromium-browser` |
+| Le Pi démarre juste sur le bureau normal, pas le kiosque | Vous êtes probablement en **Desktop Autologin** au lieu de **Console Autologin** — voir Partie 1.3. C'est la cause la plus fréquente |
+| `Cannot open /dev/tty0 (Permission denied)` en testant `startx` | Soit vous testez par **SSH** (invalide, testez sur l'écran physique seulement), soit `Xwrapper.config` n'autorise pas les utilisateurs normaux à lancer X — voir Partie 7.1bis |
+| Écran noir après reboot, X démarre puis se termine proprement quelques secondes après | Openbox ou Chromium plante silencieusement. Consultez `~/kiosk.log` pour voir l'erreur exacte |
+| `chromium-browser: command not found` dans `~/kiosk.log` | Le paquet s'appelle `chromium` sur votre système, pas `chromium-browser`. Corrigez le nom dans `~/kiosk.sh` (voir 7.1 et 7.4) |
+| Icônes 📡📖 invisibles sur la page de lancement | Polices manquantes — voir Partie 7.1ter (`fonts-noto-color-emoji`) |
+| Page "Filtered" (tinyproxy) sur MeshMonitor/Kiwix/la page de lancement | Testez d'abord en dehors du navigateur : `curl -x http://127.0.0.1:8888 http://localhost:3001`. Si ça échoue aussi, vérifiez `FilterURLs Yes` dans `tinyproxy.conf` et que vos règles dans `/etc/tinyproxy/filter` incluent bien le schéma `http://` complet (voir 7.3) |
+| Toujours "Filtered" même après avoir corrigé `tinyproxy.conf`/`filter` | Assurez-vous d'avoir bien retiré l'ancienne politique Chromium si vous l'aviez testée : `sudo rm -f /etc/chromium/policies/managed/policies.json`, puis rebootez — les deux mécanismes peuvent se chevaucher |
+| Un site externe passe quand même à travers le proxy | Vérifiez `--proxy-bypass-list="<-loopback>"` dans `kiosk.sh` — sans ce flag exact, Chromium peut contourner le proxy pour certaines requêtes locales |
+| Le kiosque se lance sur un écran noir (mais pas de crash dans le log) | Augmentez le `sleep 15` dans kiosk.sh — Docker n'a peut-être pas fini de démarrer |
+| Impossible de fermer Chromium | Utilisez SSH depuis un autre appareil : `ssh mesh@meshstation.local` puis `pkill chromium` (ou `chromium-browser` selon votre paquet) |
 | Le clavier Bluetooth ne répond pas au démarrage | Vérifiez `bluetoothctl info <MAC>` — le `trust` doit être actif (voir Partie 2.4) |
-| La politique JSON n'est pas appliquée | Redémarrez Chromium complètement (`sudo reboot`) ; vérifiez la syntaxe JSON avec `python3 -m json.tool /etc/chromium/policies/managed/policies.json` |
 
 ---
 
@@ -639,6 +805,67 @@ MeshMonitor 4.x inclut aussi une fonction **Backup & Restore** complète directe
 
 ---
 
+## Partie 9 : Mettre à jour le système (NOUVEAU)
+
+Comme le Wi-Fi (`wlan0`) est entièrement dédié au point d'accès `MeshStation`, le Pi n'a plus d'accès Internet par ce biais — il faut **brancher un câble Ethernet** temporairement pour mettre à jour le système, les conteneurs Docker, et vérifier le firmware du Heltec.
+
+### 9.1 Brancher l'Ethernet
+
+Branchez un câble entre le port Ethernet du Pi et votre routeur (avec accès Internet). Confirmez l'obtention d'une IP :
+
+```bash
+ip addr show eth0
+```
+
+Le point d'accès `MeshStation` sur `wlan0` continue de fonctionner normalement pendant ce temps — les deux interfaces sont indépendantes, brancher l'Ethernet ne coupe rien pour le Heltec.
+
+### 9.2 Mettre à jour le système d'exploitation
+
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+Si le noyau ou des composants critiques ont été mis à jour, redémarrez :
+```bash
+sudo reboot
+```
+
+⚠️ **Après ce reboot, vérifiez que le point d'accès a bien repris** (voir l'avertissement de la Partie 3.3 sur `wlan0` qui peut retomber sur l'ancien profil Wi-Fi maison) :
+```bash
+iw dev wlan0 info
+```
+Confirmez `type AP` et `ssid MeshStation`.
+
+### 9.3 Mettre à jour les conteneurs Docker (MeshMonitor, TileServer, Kiwix)
+
+```bash
+cd ~/meshmonitor
+docker compose pull
+docker compose up -d
+docker compose ps
+```
+
+MeshMonitor a aussi un bouton **Update** intégré dans son interface web (Settings → System) qui peut suffire pour lui seul, sans passer par la ligne de commande.
+
+### 9.4 Vérifier le firmware du Heltec (optionnel)
+
+Branchez temporairement le Heltec en USB (à n'importe quel ordinateur avec accès Internet, pas nécessairement le Pi) et comparez votre version actuelle à la dernière disponible :
+
+```bash
+meshtastic --port /dev/ttyACM0 --info
+```
+Notez `firmwareVersion`, puis comparez avec la dernière version stable sur https://flasher.meshtastic.org — suivez la Partie 3.1 pour reflasher si une mise à jour est souhaitée. **Ce n'est pas obligatoire à chaque fois** ; ne le faites que si vous rencontrez un bug spécifique ou voulez une nouvelle fonctionnalité.
+
+### 9.5 Débrancher l'Ethernet
+
+Une fois les mises à jour terminées, débranchez le câble — le kit reprend son fonctionnement entièrement autonome sur `wlan0`/`MeshStation`.
+
+### Fréquence recommandée
+
+Il n'y a pas d'urgence à mettre à jour souvent un système qui fonctionne bien hors-ligne — une vérification tous les 1-3 mois (ou avant un déploiement important sur le terrain) est largement suffisante.
+
+---
+
 ## Référence rapide
 
 ### URLs des services
@@ -666,9 +893,11 @@ MeshMonitor 4.x inclut aussi une fonction **Backup & Restore** complète directe
 | Docker Compose | `~/meshmonitor/docker-compose.yml` |
 | Tuiles de carte | `~/meshmonitor/tiles/` |
 | Fichiers ZIM (Wikipedia) | `~/meshmonitor/kiwix/` |
-| Page de lancement kiosque | `~/kiosk/launcher.html` |
-| Politique Chromium | `/etc/chromium/policies/managed/policies.json` |
+| Page de lancement kiosque | `~/kiosk/launcher.html` (servie via `http://localhost:8090`) |
+| Filtre proxy (restriction réseau) | `/etc/tinyproxy/filter` |
+| Config proxy | `/etc/tinyproxy/tinyproxy.conf` |
 | Script de démarrage kiosque | `~/kiosk.sh` |
+| Journal de débogage du kiosque | `~/kiosk.log` |
 
 ---
 
